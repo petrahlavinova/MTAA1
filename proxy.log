@@ -1,0 +1,5 @@
+23:47:37:INFO:REGISTER: From: pc@192.168.1.16
+23:47:42:INFO:REGISTER: From: notebook@192.168.1.16
+23:47:46:INFO:[ID:8~nMUKZDZ5] Hovor bol vytoceny: pc@192.168.1.16 -> notebook@192.168.1.16
+23:47:49:INFO:[ID:8~nMUKZDZ5] Hovor bol zdvihnuty: pc@192.168.1.16 <- notebook@192.168.1.16
+23:47:54:INFO:[ID:8~nMUKZDZ5] Hovor bol ukonceny: pc@192.168.1.16 -> notebook@192.168.1.16
