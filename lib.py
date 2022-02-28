@@ -61,8 +61,9 @@ rx_rport = re.compile(";rport$|;rport;")
 rx_contact_expires = re.compile("expires=([^;$]*)")
 rx_expires = re.compile("^Expires: (.*)$")
 
-rx_cseqInvite = re.compile("^CSeq: 20 INVITE")
-rx_200Ok = re.compile("^SIP/2.0 200 Ok")
+rx_cseqInvite = re.compile("^CSeq: \d* INVITE")
+rx_200 = re.compile("^SIP/2.0 200")
+rx_486 = re.compile("^SIP/2.0 486")
 rx_subject = re.compile("^Subject:")
 
 # global dictionnary
@@ -171,7 +172,12 @@ class UDPHandler(socketserver.BaseRequestHandler):
         return False
 
     def isOk(self):
-        if rx_200Ok.search(self.data[0]):
+        if rx_200.search(self.data[0]):
+            return True
+        return False
+
+    def isBusy(self):
+        if rx_486.search(self.data[0]):
             return True
         return False
 
@@ -238,9 +244,9 @@ class UDPHandler(socketserver.BaseRequestHandler):
                     if md:
                         contact = md.group(1)
             
-        logging.info(f"REGISTER: From: {fromm}")
+        logging.info(f"Registracia uzivatela: {fromm} ({contact})")
         registrar[fromm]=[contact,self.socket,self.client_address]
-        self.sendResponse("200 0K")
+        self.sendResponse("200 0K / V poriadku")
         
     def processInvite(self):
         origin = self.getOrigin()
@@ -251,7 +257,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
         cSubject = self.hasSubject()
         if not cSubject:
             callId = self.getCallId()
-            logging.info(f"[ID:{callId}] Hovor bol vytoceny: {origin} -> {destination}")
+            logging.info(f"[ID: {callId}] Hovor bol vytoceny: {origin} -> {destination}")
         if len(destination) > 0:
             if destination in registrar:
                 socket,claddr = self.getSocketInfo(destination)
@@ -281,7 +287,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
     def processNonInvite(self):
         origin = self.getOrigin()
         if len(origin) == 0 or not origin in registrar:
-            self.sendResponse("400 Bad Request")
+            self.sendResponse("400 Bad Request/ Neplatny host")
             return
         destination = self.getDestination()
         if len(destination) > 0:
@@ -295,14 +301,15 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 text = "\r\n".join(data)
                 socket.sendto(text.encode('utf-8') , claddr)
             else:
-                self.sendResponse("406 Not Acceptable")
+                self.sendResponse("406 Not Acceptable / Neregistrovany ciel")
         else:
-            self.sendResponse("500 Server Internal Error")
+            self.sendResponse("500 Server Internal Error / Nespravny ciel")
                 
     def processCode(self):
         origin = self.getOrigin()
         cSeq = self.isInvite()
         cOk = self.isOk()
+        cBusy = self.isBusy()
         if len(origin) > 0:
             if origin in registrar:
                 socket,claddr = self.getSocketInfo(origin)
@@ -313,7 +320,11 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 if cSeq and cOk:
                     destination = self.getDestination()
                     callId = self.getCallId()
-                    logging.info(f"[ID:{callId}] Hovor bol zdvihnuty: {origin} <- {destination}")
+                    logging.info(f"[ID :{callId}] Hovor bol prijaty: {origin} <- {destination}")
+                if cSeq and cBusy:
+                    destination = self.getDestination()
+                    callId = self.getCallId()
+                    logging.info(f"[ID :{callId}] Hovor bol odmietnuty: {origin} <- {destination}")
                 
                 
     def processRequest(self):
@@ -331,7 +342,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 origin = self.getOrigin()
                 destination = self.getDestination()
                 callId = self.getCallId()
-                logging.info(f"[ID:{callId}] Hovor bol ukonceny: {origin} -> {destination}")
+                logging.info(f"[ID: {callId}] Hovor bol ukonceny: {origin} -> {destination}")
             elif rx_cancel.search(request_uri):
                 self.processNonInvite()
             elif rx_options.search(request_uri):
@@ -347,11 +358,11 @@ class UDPHandler(socketserver.BaseRequestHandler):
             elif rx_update.search(request_uri):
                 self.processNonInvite()
             elif rx_subscribe.search(request_uri):
-                self.sendResponse("200 0K")
+                self.sendResponse("200 0K / V poriadku")
             elif rx_publish.search(request_uri):
-                self.sendResponse("200 0K")
+                self.sendResponse("200 0K / V poriadku")
             elif rx_notify.search(request_uri):
-                self.sendResponse("200 0K")
+                self.sendResponse("200 0K / V poriadku")
             elif rx_code.search(request_uri):
                 self.processCode()
             else:
@@ -370,7 +381,6 @@ class UDPHandler(socketserver.BaseRequestHandler):
             self.processRequest()
         else:
             if len(data) > 4:
-                
                 logging.warning("---\n>> server received [%d]:" % len(data))
                 hexdump(data,' ',16)
                 logging.warning("---")
