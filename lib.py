@@ -63,7 +63,7 @@ rx_expires = re.compile("^Expires: (.*)$")
 
 rx_cseqInvite = re.compile("^CSeq: \d* INVITE")
 rx_200 = re.compile("^SIP/2.0 200")
-rx_486 = re.compile("^SIP/2.0 486")
+rx_603 = re.compile("^SIP/2.0 603")
 rx_subject = re.compile("^Subject:")
 
 # global dictionnary
@@ -176,8 +176,8 @@ class UDPHandler(socketserver.BaseRequestHandler):
             return True
         return False
 
-    def isBusy(self):
-        if rx_486.search(self.data[0]):
+    def isDeclined(self):
+        if rx_603.search(self.data[0]):
             return True
         return False
 
@@ -267,7 +267,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 text = "\r\n".join(data)
                 socket.sendto(text.encode('utf-8') , claddr)
             else:
-                self.sendResponse("480 Temporarily Unavailable / Neregistrovany ciel")
+                self.sendResponse("480 Temporarily Unavailable / Neregistrovany ucastnik")
         else:
             self.sendResponse("500 Server Internal Error / Nespravny ciel")
                 
@@ -301,7 +301,7 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 text = "\r\n".join(data)
                 socket.sendto(text.encode('utf-8') , claddr)
             else:
-                self.sendResponse("406 Not Acceptable / Neregistrovany ciel")
+                self.sendResponse("406 Not Acceptable / Neregistrovany ucastnik")
         else:
             self.sendResponse("500 Server Internal Error / Nespravny ciel")
                 
@@ -309,23 +309,41 @@ class UDPHandler(socketserver.BaseRequestHandler):
         origin = self.getOrigin()
         cSeq = self.isInvite()
         cOk = self.isOk()
-        cBusy = self.isBusy()
+        cDeclined = self.isDeclined()
+        statusCode = int(rx_code.search(self.data[0]).group(1))
         if len(origin) > 0:
             if origin in registrar:
                 socket,claddr = self.getSocketInfo(origin)
                 self.data = self.removeRouteHeader()
                 data = self.removeTopVia()
-                text = "\r\n".join(data)
-                socket.sendto(text.encode('utf-8'),claddr)
                 if cSeq and cOk:
                     destination = self.getDestination()
                     callId = self.getCallId()
                     logging.info(f"[ID :{callId}] Hovor bol prijaty: {origin} <- {destination}")
-                if cSeq and cBusy:
+                if cSeq and cDeclined:
                     destination = self.getDestination()
                     callId = self.getCallId()
                     logging.info(f"[ID :{callId}] Hovor bol odmietnuty: {origin} <- {destination}")
-                
+                if statusCode == 100:
+                    data[0] = 'SIP/2.0 100 Snazim sa nadviazat spojenie'
+                elif statusCode == 180:
+                    data[0] = 'SIP/2.0 180 Zvonim' 
+                elif statusCode == 181:
+                    data[0] = 'SIP/2.0 181 Hovor je presmerovany' 
+                elif statusCode == 408:
+                    data[0] = 'SIP/2.0 408 Casovy limit vyprsal' 
+                elif statusCode == 486:
+                    data[0] = 'SIP/2.0 486 Obsadene'
+                elif statusCode == 487:
+                    data[0] = 'SIP/2.0 487 Ziadosť zrusena'
+                elif statusCode == 503:
+                    data[0] = 'SIP/2.0 503 Nedostupna sluzba' 
+                elif statusCode == 504:
+                    data[0] = 'SIP/2.0 504 Casovy limit servera vyprsal'
+                elif statusCode == 603:
+                    data[0] = 'SIP/2.0 603 Zamietnute' 
+                text = "\r\n".join(data)
+                socket.sendto(text.encode('utf-8'),claddr)  
                 
     def processRequest(self):
         #print "processRequest"
@@ -384,5 +402,6 @@ class UDPHandler(socketserver.BaseRequestHandler):
                 logging.warning("---\n>> server received [%d]:" % len(data))
                 hexdump(data,' ',16)
                 logging.warning("---")
+
 
     

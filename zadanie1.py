@@ -1,3 +1,7 @@
+# Zadanie 1. SIP PROXY
+# MTAA 2021/2022 Letný semester
+# Petra Hlavinová
+
 import socketserver
 import lib
 HOST = '0.0.0.0'
